@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kode Program Robot Miko ESP32-C3</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #0d1117;
+            color: #c9d1d9;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background-color: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #30363d;
+            padding-bottom: 15px;
+            margin-bottom: 15px;
+        }
+        .title-area h1 {
+            font-size: 20px;
+            color: #58a6ff;
+            margin: 0 0 5px 0;
+        }
+        .author {
+            font-size: 14px;
+            color: #8b949e;
+            margin: 0;
+        }
+        .copy-btn {
+            background-color: #238636;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        .copy-btn:hover {
+            background-color: #2ea043;
+        }
+        pre {
+            background-color: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 15px;
+            overflow-x: auto;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            color: #79c0ff;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="header">
+            <div class="title-area">
+                <h1>Source Code Robot Miko (ESP32-C3)</h1>
+                <p class="author">By Azzam Project</p>
+            </div>
+            <button class="copy-btn" onclick="copyCode()">Salin Kode</button>
+        </div>
+        <pre><code id="codeBlock">#include &lt;ESP32Servo.h&gt;
+#include &lt;Wire.h&gt;
+#include &lt;Adafruit_GFX.h&gt;
+#include &lt;Adafruit_SSD1306.h&gt;
+#include &lt;Adafruit_VL53L0X.h&gt;
+
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+
+// --- PENJELASAN MIMIK WAJAH / BITMAP ---
+// 1. epd_bitmap_mata_terbuka: Menampilkan ekspresi Miko saat sedang santai, tenang, atau idle (menghadap depan dengan mata terbuka normal).
+const unsigned char epd_bitmap_mata_terbuka [] PROGMEM = { 
+  0x00, 0x00, 0x07, 0xe0, 0x1f, 0xf8, 0x38, 0x1c, 0x60, 0x06, 0xc0, 0x03, 0xc0, 0x03, 0x80, 0x01, 
+  0x80, 0x01, 0xc0, 0x03, 0xc0, 0x03, 0x60, 0x06, 0x38, 0x1c, 0x1f, 0xf8, 0x07, 0xe0, 0x00, 0x00 
+};
+
+// 2. epd_bitmap_mata_tertutup: Menampilkan ekspresi Miko saat sedang berkedip atau beristirahat.
+const unsigned char epd_bitmap_mata_tertutup [] PROGMEM = { 
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7f, 0xfe, 0xff, 0xff, 0xc0, 0x03, 
+  0xc0, 0x03, 0xff, 0xff, 0x7f, 0xfe, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 
+};
+
+// 3. epd_bitmap_kaget_kiri: Menampilkan ekspresi terkejut atau melotot ke arah kiri saat sensor mendeteksi objek di sisi kiri.
+const unsigned char epd_bitmap_kaget_kiri [] PROGMEM = { 
+  0x00, 0x00, 0x0f, 0xf0, 0x3f, 0xf8, 0x70, 0x1c, 0xe0, 0x06, 0xcf, 0xf3, 0xcf, 0xf3, 0x8f, 0xf1, 
+  0x8f, 0xf1, 0xcf, 0xf3, 0xcf, 0xf3, 0xe0, 0x06, 0x70, 0x1c, 0x3f, 0xf8, 0x0f, 0xf0, 0x00, 0x00 
+};
+
+// 4. epd_bitmap_kaget_kanan: Menampilkan ekspresi terkejut atau melotot ke arah kanan saat sensor mendeteksi objek di sisi kanan.
+const unsigned char epd_bitmap_kaget_kanan [] PROGMEM = { 
+  0x00, 0x00, 0x0f, 0xf0, 0x3f, 0xf8, 0x70, 0x1c, 0xe0, 0x06, 0xcf, 0xf3, 0xcf, 0xf3, 0xf1, 0xf8, 
+  0xf1, 0xf8, 0xcf, 0xf3, 0xcf, 0xf3, 0xe0, 0x06, 0x70, 0x1c, 0x3f, 0xf8, 0x0f, 0xf0, 0x00, 0x00 
+};
+
+// 5. epd_bitmap_sentuh: Menampilkan ekspresi senang, berbinar-binar, atau interaktif saat sensor sentuh diaktifkan.
+const unsigned char epd_bitmap_sentuh [] PROGMEM = { 
+  0x00, 0x00, 0x0c, 0x30, 0x1e, 0x78, 0x3f, 0xfc, 0x7f, 0xfe, 0xff, 0xff, 0xff, 0xff, 0xef, 0xf7, 
+  0xef, 0xf7, 0xff, 0xff, 0xff, 0xff, 0x7f, 0xfe, 0x3f, 0xfc, 0x1e, 0x78, 0x0c, 0x30, 0x00, 0x00 
+};
+
+Adafruit_VL53L0X lox = Adafruit_VL53L0X();
+Servo servoX; 
+Servo servoY; 
+
+const int pinI2C_SDA = 8;
+const int pinI2C_SCL = 9;
+
+const int pinIR_Kiri = 1;
+const int pinIR_Kanan = 3;
+const int pinSentuh = 4;
+
+const int pinServoX = 5;
+const int pinServoY = 6;
+
+float currentSudutX = 90;
+float currentSudutY = 90;
+const float smoothing = 0.15; 
+
+int lastObjectDir = 90; 
+unsigned long lastActionTime = 0;
+unsigned long intervalAction = 3000;
+int idleMode = 0;
+
+unsigned long objectStartTime = 0; 
+unsigned long animationStartTime = 0; 
+int interactionState = 0; 
+
+int lockX = 90; 
+int lockY = 90; 
+
+int happyStep = 0;
+unsigned long lastHappyStep = 0;
+
+void setup() {
+  Serial.begin(9600);
+  
+  Wire.setPins(pinI2C_SDA, pinI2C_SCL);
+  Wire.begin();
+
+  pinMode(pinIR_Kiri, INPUT);
+  pinMode(pinIR_Kanan, INPUT);
+  pinMode(pinSentuh, INPUT);
+  
+  servoX.attach(pinServoX);
+  servoY.attach(pinServoY);
+  servoX.write(90);
+  servoY.write(90);
+  delay(1000);
+  
+  if (!lox.begin()) {
+    Serial.println(F("Gagal mendeteksi sensor VL53L0X!"));
+  }
+
+  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println(F("LCD Gagal Terdeteksi!"));
+  }
+  
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  display.setCursor(0,0);
+  display.println("ESP32-C3 Ready...");
+  display.display();
+  delay(1500);
+}
+
+void loop() {
+  VL53L0X_RangingMeasurementData_t measure;
+  lox.rangingTest(&measure, false);
+  
+  int targetSudutX = 90;
+  int targetSudutY = 90;
+
+  bool irKiri = (digitalRead(pinIR_Kiri) == LOW);
+  bool irKanan = (digitalRead(pinIR_Kanan) == LOW);
+  bool laserDeteksi = (measure.RangeStatus != 4 && measure.RangeMilliMeter < 400 && measure.RangeMilliMeter > 50);
+  bool sentuh = (digitalRead(pinSentuh) == HIGH);
+
+  display.clearDisplay();
+  display.setCursor(0, 0);
+
+  if (sentuh) {
+    if (millis() - lastHappyStep > 100) { happyStep = (happyStep + 1) % 4; lastHappyStep = millis(); }
+    targetSudutX = (happyStep % 2 == 0) ? 70 : 110;
+    targetSudutY = (happyStep < 2) ? 110 : 70;
+    interactionState = 0;
+
+    display.drawBitmap(0, 0, epd_bitmap_sentuh, 128, 64, WHITE);
+    Serial.println("Status: Sentuh");
+  } 
+  else if (irKiri || irKanan || laserDeteksi) {
+    if (interactionState == 0) {
+      objectStartTime = millis();
+      interactionState = 1;
+    }
+    
+    if (interactionState == 1) {
+      if (irKiri) lastObjectDir = 45;
+      else if (irKanan) lastObjectDir = 135;
+      
+      targetSudutX = lastObjectDir;
+      targetSudutY = (laserDeteksi) ? map(measure.RangeMilliMeter, 50, 400, 45, 135) : 90;
+      
+      if (millis() - objectStartTime > 7000) { 
+        interactionState = 2;
+        animationStartTime = millis();
+        lockX = lastObjectDir;
+        lockY = targetSudutY;
+      }
+    } 
+    else if (interactionState == 2) {
+      unsigned long animElapsed = millis() - animationStartTime;
+      if (animElapsed < 4000) {
+        targetSudutX = lockX + (sin(animElapsed / 150.0) * 15); 
+        targetSudutY = lockY + (cos(animElapsed / 150.0) * 12);
+        
+        targetSudutX = constrain(targetSudutX, 30, 150);
+        targetSudutY = constrain(targetSudutY, 30, 150);
+      } else {
+        interactionState = 3; 
+      }
+    } else {
+      targetSudutX = lastObjectDir;
+      targetSudutY = (laserDeteksi) ? map(measure.RangeMilliMeter, 50, 400, 45, 135) : 90;
+    }
+
+    if (irKiri || lastObjectDir == 45) {
+      display.drawBitmap(0, 0, epd_bitmap_kaget_kiri, 128, 64, WHITE);
+      Serial.println("Status: Kiri");
+    } else {
+      display.drawBitmap(0, 0, epd_bitmap_kaget_kanan, 128, 64, WHITE);
+      Serial.println("Status: Kanan");
+    }
+  } 
+  else {
+    interactionState = 0; 
+    lastObjectDir = 90;
+    if (millis() - lastActionTime > intervalAction) {
+      idleMode = random(0, 4);
+      intervalAction = random(2000, 5001);
+      lastActionTime = millis();
+    }
+    if (idleMode == 1) { targetSudutX = 45; targetSudutY = 135; }
+    else if (idleMode == 2) { targetSudutX = 90; targetSudutY = 45; }
+    else if (idleMode == 3) { targetSudutX = 135; targetSudutY = 90; }
+    else { targetSudutX = 90; targetSudutY = 90; }
+
+    display.drawBitmap(0, 0, epd_bitmap_mata_terbuka, 128, 64, WHITE);
+    Serial.println("Status: Idle");
+  }
+
+  currentSudutX += (targetSudutX - currentSudutX) * smoothing;
+  currentSudutY += (targetSudutY - currentSudutY) * smoothing;
+  servoX.write((int)currentSudutX);
+  servoY.write((int)currentSudutY);
+
+  display.display();
+  
+  delay(20); 
+}</code></pre>
+    </div>
+
+    <script>
+        function copyCode() {
+            const codeText = document.getElementById("codeBlock").innerText;
+            navigator.clipboard.writeText(codeText).then(() => {
+                const btn = document.querySelector(".copy-btn");
+                btn.innerText = "Berhasil Disalin!";
+                setTimeout(() => {
+                    btn.innerText = "Salin Kode";
+                }, 2000);
+            });
+        }
+    </script>
+</body>
+</html>
